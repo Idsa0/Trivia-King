@@ -2,15 +2,16 @@ from src.ui.userinterface import UserInterface
 
 
 class CLI(UserInterface):
-    _ANSI = {
+    _ANSI_COLORS = {
         "red": "\033[91m",
         "green": "\033[92m",
         "yellow": "\033[93m",
         "blue": "\033[94m",
         "purple": "\033[95m",
         "cyan": "\033[96m",
-        "white": "\033[97m",
-        "end": "\033[0m",
+        "white": "\033[97m"
+    }
+    _ANSI_FORMATS = {
         "bold": "\033[1m",
         "italic": "\033[3m",
         "underline": "\033[4m",
@@ -18,6 +19,8 @@ class CLI(UserInterface):
         "strikethrough": "\033[9m",
         "double_underline": "\033[21m"
     }
+    _ANSI_END = "\033[0m"
+    _ANSI = {**_ANSI_COLORS, **_ANSI_FORMATS, "end": _ANSI_END}
 
     def display(self, message: str) -> None:
         """
@@ -53,3 +56,15 @@ class CLI(UserInterface):
     @property
     def ansi(self):
         return self._ANSI
+
+    @property
+    def ansi_colors(self):
+        return self._ANSI_COLORS
+
+    @property
+    def ansi_formats(self):
+        return self._ANSI_FORMATS
+
+    @property
+    def ansi_end(self):
+        return self._ANSI_END

@@ -16,8 +16,28 @@ class Client:
 
     def recv(self) -> None:
         msg, _ = self.sock.recvfrom(1024)
-        msg = msg.decode()
-        self.ui.display(self.ui.augment(msg, choice(list(self.ui.ansi.keys()))))
+        msg_str = msg.decode()
+
+        if len(msg_str) < 47:
+            return
+
+        if msg_str[:19] != "b'\\xab\\xcd\\xdc\\xba'":
+            return
+
+        if msg_str[19:26] != "b'\\x02'":
+            self.ui.display("Invalid message type")
+            self.ui.display(msg_str[19:26])
+
+        # server name = msg_str[26:56].strip()
+
+        self.ui.display(msg_str)
+        msg_str = msg_str[56:]
+
+        self.ui.display(self.ui.augment(msg_str,
+                                        choice(list(self.ui.ansi_colors.keys())),
+                                        choice(list(self.ui.ansi_formats.keys()))))
+
+        # this is obviously wrong, tomorrow I'll try to use the struct module
 
 
 if __name__ == '__main__':

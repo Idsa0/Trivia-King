@@ -25,10 +25,11 @@ class Player(Connection):
 
 class TriviaServer(Server):
     __PORT_UDP = 13117
+    __PORT_UDP_bytes = __PORT_UDP.to_bytes(2, 'big')
     __PORT_TCP = 0  # TODO
 
-    __MAGIC_COOKIE = 0xABCDDCBA
-    __MESSAGE_TYPE = 0x2
+    __MAGIC_COOKIE = b'\xAB\xCD\xDC\xBA'
+    __MESSAGE_TYPE = b'\x02'
     __SERVER_NAME_LENGTH = 32
     __NAME = "n3tw0rk1ng_m@st3r5"
 
@@ -39,6 +40,9 @@ class TriviaServer(Server):
     __PLAYER_JOIN_DELAY_MILLIS = 10_000
 
     def __init__(self, name: str = __NAME) -> None:
+        if len(name) > self.__SERVER_NAME_LENGTH:
+            raise ValueError(f"Name too long, must be less than {self.__SERVER_NAME_LENGTH} characters")
+
         super().__init__(gethostbyname(gethostname()), TriviaServer.__PORT_UDP)
         self.__players = {}
         self.__name = name
@@ -99,15 +103,14 @@ class TriviaServer(Server):
         # TODO
         pass
 
-    @classmethod
-    def __build_packet(cls, data: str) -> bytes:
+    def __build_packet(self, data: str) -> bytes:
         """
         Builds a packet to send to the players
         :return: The packet
         """
         return (
-            f"{cls.__MAGIC_COOKIE}{cls.__MESSAGE_TYPE}\
-            {cls.__NAME.ljust(cls.__SERVER_NAME_LENGTH, '\0')}{data}".encode())
+            f"{self.__MAGIC_COOKIE}{self.__MESSAGE_TYPE}\
+            {self.name.ljust(self.__SERVER_NAME_LENGTH, '\0')}{data}".encode())
 
     def __update_leader(self) -> None:
         """
@@ -125,11 +128,26 @@ class TriviaServer(Server):
 
         self.__leader = leader
 
+    def __add__(self, other: Connection) -> None:
+        """
+        Syntax sugar for adding a player to the game
+        :param other: The player to add
+        :return: None
+        """
+        self.__players[other.sock] = other
+
+    @property
+    def name(self) -> str:
+        return self.__name
+
+    @property
+    def short_port(self) -> bytes:
+        return self.__PORT_UDP_bytes
+
 
 def main() -> None:
     server = TriviaServer()
-    # for i in range(10):
-    server.send_broadcast("Hello, join the game!")
+    server.send_broadcast(str(server.short_port))
 
 
 if __name__ == "__main__":
