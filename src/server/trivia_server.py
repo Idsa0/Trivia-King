@@ -1,5 +1,5 @@
 from server import Server, Connection
-from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_BROADCAST
+from socket import socket, gethostname, gethostbyname
 
 
 class Player(Connection):
@@ -26,22 +26,20 @@ class Player(Connection):
 class TriviaServer(Server):
     __PORT_UDP = 13117
     __PORT_TCP = 0  # TODO
-    __IP = "127.0.0.1"  # TODO
 
     __MAGIC_COOKIE = 0xABCDDCBA
     __MESSAGE_TYPE = 0x2
     __SERVER_NAME_LENGTH = 32
     __NAME = "n3tw0rk1ng_m@st3r5"
 
-    __STRINGS = {"start": f"Server started, listening on IP address {__IP}",
+    __STRINGS = {"start": f"Server started, listening on IP address: ",
                  "game_over": "Game over!\nCongratulations to the winner: ",
                  "restart": "Game over, sending out offer requests..."}
 
     __PLAYER_JOIN_DELAY_MILLIS = 10_000
 
-    def __init__(self, name=__NAME) -> None:
-        super().__init__(TriviaServer.__IP, TriviaServer.__PORT_UDP)
-        # TODO find ip
+    def __init__(self, name: str = __NAME) -> None:
+        super().__init__(gethostbyname(gethostname()), TriviaServer.__PORT_UDP)
         self.__players = {}
         self.__name = name
 
@@ -107,7 +105,6 @@ class TriviaServer(Server):
         Builds a packet to send to the players
         :return: The packet
         """
-        # TODO test print
         return (
             f"{cls.__MAGIC_COOKIE}{cls.__MESSAGE_TYPE}\
             {cls.__NAME.ljust(cls.__SERVER_NAME_LENGTH, '\0')}{data}".encode())
@@ -129,5 +126,11 @@ class TriviaServer(Server):
         self.__leader = leader
 
 
+def main() -> None:
+    server = TriviaServer()
+    # for i in range(10):
+    server.send_broadcast("Hello, join the game!")
+
+
 if __name__ == "__main__":
-    pass
+    main()
