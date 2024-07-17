@@ -1,0 +1,51 @@
+Question,Truth Value
+Is TCP a connection-oriented protocol?,True
+Does UDP guarantee message delivery?,False
+Is an IP address composed of four octets?,True
+Does a router operate at the data link layer?,False
+Is HTTP a stateless protocol?,True
+Does a MAC address uniquely identify a device on a network?,True
+Is DNS used to translate domain names to IP addresses?,True
+Can a subnet mask be used to divide an IP address into network and host parts?,True
+Does the OSI model have seven layers?,True
+Is an Ethernet cable typically used for wireless networking?,False
+Is SSL used to encrypt data over the internet?,True
+Does a switch operate at the network layer?,False
+Is ICMP used for sending error messages and operational information?,True
+Does DHCP assign IP addresses to devices on a network?,True
+Is a firewall used to filter incoming and outgoing network traffic?,True
+Is IPv6 the successor to IPv4?,True
+Can NAT be used to allow multiple devices on a local network to share a single public IP address?,True
+Is a VPN used to create a secure connection over a public network?,True
+Does FTP stand for File Transfer Protocol?,True
+Is an SSID used to identify a Wi-Fi network?,True
+Is the MTU size typically set to 1500 bytes for Ethernet?,True
+Can BGP be used to determine the best paths between autonomous systems?,True
+Is a Layer 2 switch also known as a multiport bridge?,True
+Does MPLS stand for Multiprotocol Label Switching?,True
+Is a TCP three-way handshake used to establish a connection?,True
+Can SNMP be used for network management?,True
+Does OSPF stand for Open Shortest Path First?,True
+Is the maximum length of a CAT5 cable 100 meters?,True
+Can QoS be used to prioritize certain types of network traffic?,True
+Does the STP protocol prevent network loops?,True
+Is RSTP an enhancement of the original STP protocol?,True
+Can EIGRP be used for routing within an autonomous system?,True
+Does ARP resolve IP addresses to MAC addresses?,True
+Is a CIDR notation used to denote IP address ranges?,True
+Is the default port for HTTP 80?,True
+Can ICMP be used in network diagnostics?,True
+Does GRE stand for Generic Routing Encapsulation?,True
+Is a Layer 3 switch capable of routing packets?,True
+Is the TTL field in an IP packet used to prevent indefinite looping?,True
+Does RIP use hop count as a routing metric?,True
+Does a VPN always ensure complete anonymity on the internet?,False
+Is Telnet more secure than SSH?,False
+Can an IPv4 address support more devices than an IPv6 address?,False
+Is WEP considered a secure Wi-Fi encryption method?,False
+Does the DHCP server assign IP addresses permanently?,False
+Is a hub more efficient than a switch?,False
+Can a single IPv4 address represent multiple devices without NAT?,False
+Is FTP more secure than SFTP?,False
+Does an increase in bandwidth always reduce latency?,False
+Is a broadcast address used to send a packet to a single specific host?,False
