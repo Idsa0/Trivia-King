@@ -1,5 +1,7 @@
-from server import Server, Connection
+import struct
 from socket import socket, gethostname, gethostbyname
+
+from server import Server, Connection
 
 
 class Player(Connection):
@@ -22,14 +24,21 @@ class Player(Connection):
     def __str__(self) -> str:
         return f"{self.__name} : {self.__score}"
 
+    def __cmp__(self, other) -> int:
+        if not isinstance(other, Player):
+            raise ValueError(f"Cannot compare Player with {type(other)}")
+        return self.score - other.score
+
+    def __lt__(self, other) -> bool:
+        return self.__cmp__(other) < 0
+
 
 class TriviaServer(Server):
     __PORT_UDP = 13117
-    __PORT_UDP_bytes = __PORT_UDP.to_bytes(2, 'big')
     __PORT_TCP = 0  # TODO
 
-    __MAGIC_COOKIE = b'\xAB\xCD\xDC\xBA'
-    __MESSAGE_TYPE = b'\x02'
+    __MAGIC_COOKIE = 0xABCDDCBA
+    __MESSAGE_TYPE = 0x2
     __SERVER_NAME_LENGTH = 32
     __NAME = "n3tw0rk1ng_m@st3r5"
 
@@ -54,7 +63,12 @@ class TriviaServer(Server):
         :param data: The data to send
         :return: None
         """
-        super().send_broadcast(self.__build_packet(data))
+        super().send_broadcast(struct.pack("!IB32sH",
+                                           0xABCDDCBA,
+                                           0x2,
+                                           self.name.ljust(self.__SERVER_NAME_LENGTH).encode(),
+                                           self.__PORT_UDP))
+        # TODO potentially use try-catch?
 
     def start(self) -> None:
         """
@@ -81,7 +95,7 @@ class TriviaServer(Server):
         :param data: The data to send
         :return: None
         """
-        conn.sock.send(self.__build_packet(data))
+        conn.sock.send(data.encode())
 
     def send_to_all(self, data: str) -> None:
         """
@@ -103,30 +117,12 @@ class TriviaServer(Server):
         # TODO
         pass
 
-    def __build_packet(self, data: str) -> bytes:
+    def __leader(self) -> Player:
         """
-        Builds a packet to send to the players
-        :return: The packet
+        Returns the player with the highest score
+        :return: The leader
         """
-        return (
-            f"{self.__MAGIC_COOKIE}{self.__MESSAGE_TYPE}\
-            {self.name.ljust(self.__SERVER_NAME_LENGTH, '\0')}{data}".encode())
-
-    def __update_leader(self) -> None:
-        """
-        Updates the leader of the game
-
-        :return: None
-        """
-        # TODO potentially support multiple leaders?
-        max_score = 0
-        leader = None
-        for player in self.__players.values():
-            if player.score > max_score:
-                max_score = player.score
-                leader = player
-
-        self.__leader = leader
+        return max(self.__players.values())
 
     def __add__(self, other: Connection) -> None:
         """
@@ -140,14 +136,10 @@ class TriviaServer(Server):
     def name(self) -> str:
         return self.__name
 
-    @property
-    def short_port(self) -> bytes:
-        return self.__PORT_UDP_bytes
-
 
 def main() -> None:
     server = TriviaServer()
-    server.send_broadcast(str(server.short_port))
+    server.send_broadcast("")
 
 
 if __name__ == "__main__":

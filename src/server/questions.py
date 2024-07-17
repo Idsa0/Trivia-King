@@ -1,5 +1,5 @@
-from typing import Literal
 import csv
+from typing import Literal
 
 
 def get_trivia_questions(questions: Literal["networking"] = "networking") -> dict[str: bool]:

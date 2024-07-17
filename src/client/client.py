@@ -1,7 +1,8 @@
 # mock client for testing the server
+import struct
 from socket import socket, AF_INET, SOCK_DGRAM, SO_BROADCAST, SOL_SOCKET
-from random import choice
 
+from src.ui.ansi import augment, random_color, random_format
 from src.ui.cli import CLI
 
 
@@ -16,31 +17,25 @@ class Client:
 
     def recv(self) -> None:
         msg, _ = self.sock.recvfrom(1024)
-        msg_str = msg.decode()
-
-        if len(msg_str) < 47:
+        if len(msg) != 39 or not msg.startswith(struct.pack("!IB", 0xABCDDCBA, 0x2)):
             return
 
-        if msg_str[:19] != "b'\\xab\\xcd\\xdc\\xba'":
-            return
+        msg_str = msg.decode(errors='replace')
 
-        if msg_str[19:26] != "b'\\x02'":
-            self.ui.display("Invalid message type")
-            self.ui.display(msg_str[19:26])
+        self.ui.display(augment(f"server name: {msg_str[5:36].strip()}",
+                                random_color(),
+                                random_format()))
 
-        # server name = msg_str[26:56].strip()
-
-        self.ui.display(msg_str)
-        msg_str = msg_str[56:]
-
-        self.ui.display(self.ui.augment(msg_str,
-                                        choice(list(self.ui.ansi_colors.keys())),
-                                        choice(list(self.ui.ansi_formats.keys()))))
-
-        # this is obviously wrong, tomorrow I'll try to use the struct module
+        self.ui.display(augment(f"server port: {struct.unpack("!H", msg[37:])[0]}",
+                                random_color(),
+                                random_format()))
 
 
-if __name__ == '__main__':
+def main() -> None:
     c = Client()
     while True:
         c.recv()
+
+
+if __name__ == '__main__':
+    main()

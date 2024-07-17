@@ -40,7 +40,6 @@ class Server(ABC):
         """
         with socket(AF_INET, SOCK_DGRAM) as s:
             s.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
-            # s.bind((self.ip, 0))
             s.sendto(data, ("<broadcast>", self.port))
 
     @abstractmethod
