@@ -12,9 +12,25 @@ class UserInterface(ABC):
         pass
 
     @abstractmethod
-    def get_input(self, prompt: str) -> str:
+    def clear(self) -> None:
+        """
+        Clears the screen
+        :return: None
+        """
+        pass
+
+    @abstractmethod
+    def get_input(self, prompt: str = "") -> str:
         """
         Gets input from the user
+        :param prompt: The prompt to display
+        :return: The user's input
+        """
+        pass
+
+    def get_boolean_input(self, prompt: str) -> bool:
+        """
+        Gets a boolean input from the user
         :param prompt: The prompt to display
         :return: The user's input
         """

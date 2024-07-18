@@ -1,0 +1,8 @@
+server:
+    everything
+
+client:
+    connect to server (add mock feature to server)
+    send and receive data
+    close connection
+    optional: get name with argv

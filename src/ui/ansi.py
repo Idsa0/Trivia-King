@@ -20,6 +20,8 @@ __ANSI_FORMATS = {
 __ANSI_END = "\033[0m"
 ANSI = {**__ANSI_COLORS, **__ANSI_FORMATS, "end": __ANSI_END}
 
+CLEAR = "\033[H\033[J"
+
 
 def augment(message: str, *args: str) -> str:
     """
