@@ -2,7 +2,8 @@ server:
     everything
 
 client:
-    connect to server (add mock feature to server)
-    send and receive data
-    close connection
     optional: get name with argv
+    change to "mostly single threaded"
+
+ui:
+    get_boolean_input should use kwargs
