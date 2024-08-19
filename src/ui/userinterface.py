@@ -12,10 +12,28 @@ class UserInterface(ABC):
         pass
 
     @abstractmethod
-    def get_input(self, prompt: str) -> str:
+    def clear(self) -> None:
+        """
+        Clears the screen
+        :return: None
+        """
+        pass
+
+    @abstractmethod
+    def get_input(self, prompt: str = "", timeout: int = -1) -> str | None:
         """
         Gets input from the user
-        :param prompt: The prompt to display
+        :param prompt: (Optional) The prompt to display
+        :param timeout: (Optional) The timeout in seconds
+        :return: The user's input
+        """
+        pass
+
+    def get_boolean_input(self, prompt: str, timeout: int = -1) -> bool | None:
+        """
+        Gets a boolean input from the user
+        :param prompt: (Optional) The prompt to display
+        :param timeout: (Optional) The timeout in seconds
         :return: The user's input
         """
         pass
