@@ -1,7 +1,7 @@
 import struct
 from socket import socket, gethostname, gethostbyname
 
-from server import Server, Connection
+from src.server.server import Server, Connection
 
 
 class Player(Connection):
@@ -67,7 +67,7 @@ class TriviaServer(Server):
                                            0xABCDDCBA,
                                            0x2,
                                            self.name.ljust(self.__SERVER_NAME_LENGTH).encode(),
-                                           self.__PORT_UDP))
+                                           self.__PORT_TCP))
         # TODO potentially use try-catch?
 
     def start(self) -> None:
