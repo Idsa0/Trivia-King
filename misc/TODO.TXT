@@ -3,7 +3,6 @@ server:
 
 client:
     optional: get name with argv
-    change to "mostly single threaded"
 
 ui:
     get_boolean_input should use kwargs

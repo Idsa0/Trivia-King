@@ -55,6 +55,26 @@ def random_format() -> str:
     return choice(list(__ANSI_FORMATS.keys()))
 
 
+def rainbowify(message: str) -> str:
+    """
+    Paints each character in the message with a random color
+    :param message: The message to rainbowify
+    :return: The rainbowified message
+    """
+    return "".join(augment(char, random_color()) for char in message)
+
+
+def clean(message: str) -> str:
+    """
+    Removes all ANSI escape codes from the message
+    :param message: The message to clean
+    :return: The cleaned message
+    """
+    for ansi in ANSI.values():
+        message = message.replace(ansi, "")
+    return message
+
+
 if __name__ == "__main__":
     print(augment("Hello, World!", "red", "bold", "underline"))
     for color in __ANSI_COLORS:
@@ -63,3 +83,7 @@ if __name__ == "__main__":
     for fmt in __ANSI_FORMATS:
         print(augment("#", fmt), end="")
     print()
+
+    rainbow = rainbowify("Hello, World!")
+    print(rainbow)
+    print(clean(rainbow))

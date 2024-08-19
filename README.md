@@ -20,6 +20,7 @@ facts and must answer correctly as quickly as possible.
 ### Requirements
 
 - **Python 3.x**
+- **`inputimeout`** library: Install using `pip install inputimeout`.
 
 ### Running the Server
 
