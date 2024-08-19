@@ -115,7 +115,12 @@ class Client:
     def __receive(self) -> None:
         # 3. print server messages and wait for user input
         while self.__state == State.GAME_STARTED or self.__state == State.CONNECTED:
-            data = self.__server.recv(self.__BUFFER_SIZE)
+            try:
+                data = self.__server.recv(self.__BUFFER_SIZE)
+            except ConnectionResetError:
+                self.__ui.display(augment("Server disconnected", "red"))
+                self.__reset()
+                return
 
             opcode = get_opcode(data)
             msg = get_message(data)
