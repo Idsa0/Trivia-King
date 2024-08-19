@@ -1,8 +1,13 @@
 server:
-    everything
+    game logic
+    tests
 
 client:
     optional: get name with argv
+    tests
 
 ui:
     get_boolean_input should use kwargs
+
+questions:
+    fix the file not found error caused by the hardcoded path

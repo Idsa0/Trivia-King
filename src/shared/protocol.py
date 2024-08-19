@@ -19,8 +19,36 @@ BROADCAST_MAGIC_COOKIE = 0xABCDDCBA
 BROADCAST_MESSAGE_TYPE = 0x2
 BROADCAST_NAME_SLICE = slice(5, 36)
 BROADCAST_PORT_SLICE = slice(37, 39)
+SERVER_NAME_LENGTH = 32
 
+WAIT_FOR_PLAYER_JOIN_TIMEOUT = 10
+BROADCAST_SEND_INTERVAL = 1
 QUESTION_TIMEOUT = 10
+
+
+def create_broadcast(name: str, port: int) -> bytes:
+    """
+    Creates a broadcast message
+    :param name: The name of the server
+    :param port: The port of the server
+    :return: The encoded broadcast message
+    """
+    return struct.pack("!IB32sH",
+                       BROADCAST_MAGIC_COOKIE,
+                       BROADCAST_MESSAGE_TYPE,
+                       name.ljust(SERVER_NAME_LENGTH).encode(),
+                       port)
+
+
+def create_message(opcode: Opcode, message: str) -> str:
+    """
+    Creates a message with the given opcode
+    :param opcode: The opcode of the message
+    :param message: The content of the message
+    :return: The resulting message
+    """
+    # TODO I really dislike this hack
+    return (struct.pack("!B", opcode.value) + message.encode()).decode()
 
 
 def validate_broadcast(data: bytes) -> bool:

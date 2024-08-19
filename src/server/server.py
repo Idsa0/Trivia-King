@@ -16,12 +16,10 @@ class Connection:
 
 class Server(ABC):
     __DEFAULT_IP = "127.0.0.1"
-    __DEFAULT_PORT = 12345
     __BROADCAST_DEST = "255.255.255.255"
 
-    def __init__(self, ip: str = __DEFAULT_IP, port: int = __DEFAULT_PORT) -> None:
+    def __init__(self, ip: str = __DEFAULT_IP) -> None:
         self.__ip = ip
-        self.__port = port
 
     @abstractmethod
     def start(self) -> None:
@@ -31,16 +29,17 @@ class Server(ABC):
     def stop(self) -> None:
         pass
 
-    def send_broadcast(self, data: bytes) -> None:
+    def send_broadcast(self, data: bytes, port: int) -> None:
         """
         Sends a broadcast message
 
         :param data: The data to send
+        :param port: The port to send the data to
         :return: None
         """
         with socket(AF_INET, SOCK_DGRAM) as s:
             s.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
-            s.sendto(data, ("<broadcast>", self.port))
+            s.sendto(data, ("<broadcast>", port))
 
     @abstractmethod
     def send_to(self, conn: Connection, data: bytes) -> None:
@@ -59,17 +58,9 @@ class Server(ABC):
         return self.__ip
 
     @property
-    def port(self) -> int:
-        return self.__port
-
-    @property
     def broadcast_dest(self) -> str:
         return self.__BROADCAST_DEST
 
     @property
     def default_ip(self) -> str:
         return self.__DEFAULT_IP
-
-    @property
-    def default_port(self) -> int:
-        return self.__DEFAULT_PORT
