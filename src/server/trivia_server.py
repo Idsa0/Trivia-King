@@ -1,6 +1,6 @@
+import random
 import threading
 import time
-import random
 from socket import socket, gethostname, gethostbyname
 
 from src.server.questions import get_trivia_questions, QuestionLiteral
@@ -77,7 +77,7 @@ class TriviaServer(Server):
         :param port: The port to send the data to
         :return: None
         """
-        super().send_broadcast(create_broadcast(data, port), port)
+        super().send_broadcast(create_broadcast(data, port), PORT_UDP)
         # TODO potentially use try-catch?
 
     def __send_broadcast(self) -> None:
@@ -95,6 +95,7 @@ class TriviaServer(Server):
         self.__state = State.SENDING_OFFERS
         while self.__state != State.TERMINATED:
             self.__gameloop()
+            self.__reset_game()
 
         self.stop()
 
@@ -108,45 +109,35 @@ class TriviaServer(Server):
 
         self.__accepting_connections = True
         self.__accept_thread.start()
-        self.__ui.display(f"IM HERE {augment(self.ip, 'blue')}")
         # send offer requests every 1 second
         self.__state = State.SENDING_OFFERS
         self.__time_of_last_connection = time.time()
-        self.__ui.display(f"IM HERE2 {augment(self.ip, 'blue')}")
         while self.__accepting_connections:
             self.__send_broadcast()
 
             # Debugging the number of players
-            self.__ui.display(f"Number of players connected: {len(self.__players)}")
-
-            if len(self.__players) >= 2:
-                self.__accepting_connections = False
-                self.__ui.display(f"Enough players connected, breaking out of loop")
+            # self.__ui.display(f"Number of players connected: {len(self.__players)}")
 
             time.sleep(BROADCAST_SEND_INTERVAL)
-            self.__ui.display(f"IM HERE3 {augment(self.ip, 'blue')}")
 
-            if time.time() - self.__time_of_last_connection > QUESTION_TIMEOUT:
+            if time.time() - self.__time_of_last_connection > QUESTION_TIMEOUT \
+                    and len(self.__players) >= MINIMUM_PLAYERS:
                 self.__accepting_connections = False
                 self.__accept_thread.join()
 
-        # check if there are enough players
-        self.__ui.display(f"IM HERE4 {augment(self.ip, 'blue')}")
-
-        if len(self.__players) < 2:
+        if len(self.__players) < MINIMUM_PLAYERS:
             self.send_to_all(create_message(Opcode.END, "Not enough players to start the game"))
-            self.__state = State.INACTIVE
             return
 
         self.__state = State.GAME_STARTED
         self.send_to_all(create_message(
             Opcode.START, f"Welcome to the {augment(self.__name, 'blue')} server, "
                           f"where we are answering trivia questions about {augment(self.__topic, 'underline')}!"))
-        # TODO implement game logic
-        while len(self.__players) > 1:
+        while len(self.__players) >= MINIMUM_PLAYERS and len(self.__questions) > 0:
             # Get a random trivia question
-            question, is_true = random.choice(self.__questions)
-            self.send_to_all(create_message(Opcode.QUESTION, f"This statement is True or False? {question}"))
+            question = random.choice(list(self.__questions.keys()))
+            correct_answer = self.__questions[question]
+            self.send_to_all(create_message(Opcode.QUESTION, question))
 
             # Give players time to respond
             start_time = time.time()
@@ -156,40 +147,36 @@ class TriviaServer(Server):
                 for player_name, player in list(self.__players.items()):
                     if player_name not in answers:
                         try:
-                            answer = player.sock.recv(1024).decode().strip().upper()  # Receive and normalize answer
+                            # TODO change to non-blocking!
+                            answer = answer_literal_to_bool(get_message(player.sock.recv(1024).decode()))
                             if answer:
                                 answers[player_name] = answer
                                 self.send_to_all(create_message(Opcode.INFO, f"{player_name} answered: {answer}"))
-                        except ConnectionResetError:
+                                # TODO remove this send after debugging
+                        except ConnectionResetError:  # TODO this probably needs to be somewhere else
                             # Handle player disconnection
                             self.__players.pop(player_name)
                             self.send_to_all(create_message(Opcode.INFO, f"{player_name} has disconnected."))
+                            # TODO remove this send after debugging
 
             # Evaluate the answers and update scores
-            correct_answers = {"Y", "T", "1"} if is_true else {"N", "F", "0"}
             for player_name, answer in answers.items():
                 player = self.__players[player_name]
-                if answer in correct_answers:
+                if answer is correct_answer:
                     player.increment_score()
-                    self.send_to(player, create_message(Opcode.INFO, "Correct! You've earned a point."))
+                    self.send_to(player, create_message(Opcode.POSITIVE, "Correct! You've earned a point."))
                 else:
-                    self.send_to(player, create_message(Opcode.INFO, "Incorrect! Better luck next time."))
+                    self.send_to(player, create_message(Opcode.NEGATIVE, "Incorrect! Better luck next time."))
 
-            # Check if the game is over
-            if len(self.__players) < 1:
-                break  # End the game if there are no players left
-
-            # Notify all players that the round is over and proceed to the next question
-            self.send_to_all(create_message(Opcode.INFO, "Round over. Next question..."))
+            # Remove the question from the list of questions
+            self.__questions.pop(question)
 
         # Announce the winner or game over
-        if len(self.__players) == 1:
-            winner = list(self.__players.values())[0]
+        if (len(self.__players) == 1 or len(self.__questions) == 0) and self.__leader().score > 0:
+            winner = self.__leader()
             self.send_to_all(create_message(Opcode.END, f"Game over! Congratulations to the winner: {winner.name}"))
         else:
             self.send_to_all(create_message(Opcode.END, "Game over! No winner this time."))
-
-        self.__sock.close()
 
     def stop(self) -> None:
         pass
@@ -199,7 +186,15 @@ class TriviaServer(Server):
         Ends the game, announce the winner
         :return: None
         """
-        pass
+        self.__state = State.INACTIVE
+        self.__players.clear()
+        self.__questions = get_trivia_questions(self.__topic)
+        if self.__accept_thread.is_alive():
+            self.__accepting_connections = False
+            self.__accept_thread.join()
+        if self.__sock:
+            self.__sock.close()
+        self.__sock = None
 
     def send_to(self, conn: Connection, data: str) -> None:
         """

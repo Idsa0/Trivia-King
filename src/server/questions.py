@@ -1,23 +1,21 @@
 import csv
+import os
 from typing import Literal
 
 QuestionLiteral = Literal["networking"]
 
 
-def get_trivia_questions(questions: QuestionLiteral = "networking") -> dict[str: bool]:
+def get_trivia_questions(questions: QuestionLiteral = "networking") -> dict[str, bool]:
     """
-    Get a dictionary of trivia questions and their answers
-    :param questions: The category of questions to get
-    :return: The requested questions
+    Get a dictionary of trivia questions and their answers.
+    :param questions: The category of questions to get.
+    :return: The requested questions as a dictionary.
     """
-    if __name__ == "__main__":
-        path = f"questions/{questions}.csv"
-    else:
-        path = f"src/server/questions/{questions}.csv"
-    # TODO fix this so it works from any directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(script_dir, 'questions', f"{questions}.csv")
 
     with open(path, mode='r') as infile:
         reader = csv.reader(infile)
-        mydict = {rows[0]: bool(rows[1]) for rows in reader}
-        mydict.pop("Question")  # Remove the header
-    return mydict
+        q_dict = {rows[0]: bool(rows[1]) for rows in reader}
+        q_dict.pop("Question")  # Remove the header
+    return q_dict

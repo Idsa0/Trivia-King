@@ -24,6 +24,13 @@ SERVER_NAME_LENGTH = 32
 WAIT_FOR_PLAYER_JOIN_TIMEOUT = 10
 BROADCAST_SEND_INTERVAL = 1
 QUESTION_TIMEOUT = 10
+MINIMUM_PLAYERS = 2
+
+__ANSWER_LITERALS = {"y": True, "n": False,
+                     "yes": True, "no": False,
+                     "true": True, "false": False,
+                     "t": True, "f": False,
+                     "1": True, "0": False}
 
 
 def create_broadcast(name: str, port: int) -> bytes:
@@ -99,3 +106,15 @@ def get_message(data: bytes) -> str:
     :return: The message
     """
     return data[1:].decode()
+
+
+def answer_literal_to_bool(answer: str) -> bool | None:
+    """
+    Converts a string answer to a boolean
+    :param answer: The answer to convert
+    :return: The converted answer or None if the answer is invalid
+    """
+    normalized = answer.lower().strip()
+    if normalized in __ANSWER_LITERALS:
+        return __ANSWER_LITERALS[normalized]
+    return None

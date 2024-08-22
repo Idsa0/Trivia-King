@@ -28,12 +28,3 @@ class UserInterface(ABC):
         :return: The user's input
         """
         pass
-
-    def get_boolean_input(self, prompt: str, timeout: int = -1) -> bool | None:
-        """
-        Gets a boolean input from the user
-        :param prompt: (Optional) The prompt to display
-        :param timeout: (Optional) The timeout in seconds
-        :return: The user's input
-        """
-        pass
