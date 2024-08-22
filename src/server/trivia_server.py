@@ -246,7 +246,7 @@ class TriviaServer(Server):
 
 
 def main() -> None:
-    server = TriviaServer()
+    server = TriviaServer(topic="demo")  # TODO change this to networking
     server.start()
 
 
