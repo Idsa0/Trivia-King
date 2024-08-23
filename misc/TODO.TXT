@@ -1,6 +1,7 @@
 server:
     game logic
     tests
+    loop of client can't connecting
 
 client:
     optional: get name with argv
