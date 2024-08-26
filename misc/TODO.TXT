@@ -1,8 +1,8 @@
 server:
-    game logic
-    tests
-    loop of client can't connecting
+    text according to the requirements
+    optional: get name with argv
+
+
 
 client:
     optional: get name with argv
-    tests

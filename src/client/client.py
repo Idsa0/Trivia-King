@@ -5,7 +5,7 @@
 # 4. send user input to server
 # 5. repeat steps 3 and 4 until server sends finish message
 # 6. close connection and return to step 1
-
+import random
 import sys
 import threading
 from socket import socket, AF_INET, SOCK_DGRAM, SOCK_STREAM
@@ -28,6 +28,10 @@ class State(Enum):
 
 class Client:
     __BUFFER_SIZE = 1024
+
+    __COMMON_NAMES = ["Alice", "Bob", "Charlie", "David", "Eve", "Frank", "Grace", "Heidi", "Ivan", "Judy", "Kevin",
+                      "Linda", "Mallory", "Nancy", "Oscar", "Peggy", "Quentin", "Romeo", "Sue", "Trent", "Ursula",
+                      "Victor", "Walter", "Xander", "Yvonne", "Zelda"]
 
     def __init__(self) -> None:
         self.__state: State = State.WAITING_FOR_BROADCAST
@@ -109,6 +113,7 @@ class Client:
             return False
 
         self.__ui.display(augment("Connected to server", "green"))
+        self.__server.send(create_message(Opcode.RENAME, random.choice(self.__COMMON_NAMES)).encode())
         self.__state = State.GAME_STARTED
         return True
 
@@ -126,13 +131,13 @@ class Client:
             msg = get_message(data)
             match opcode:
                 case Opcode.ABORT:
-                    self.__ui.display(augment("Game over, server aborted", "red"))
+                    self.__ui.display(msg if msg else "Game Over! Terminating...")
                     self.__state = State.TERMINATED
                 case Opcode.START:
-                    self.__ui.display(augment("Game started", "green"))
+                    self.__ui.display(msg if msg else augment("Game started", "green"))
                     self.__state = State.GAME_STARTED
                 case Opcode.END:
-                    self.__ui.display(augment("Game over, server finished", "green"))
+                    self.__ui.display(msg if msg else "Game Over!")
                     self.__reset()
                 case Opcode.QUESTION:
                     self.__ui.display(msg)
@@ -140,9 +145,9 @@ class Client:
                 case Opcode.INFO:
                     self.__ui.display(msg)
                 case Opcode.POSITIVE:
-                    self.__ui.display(augment(rainbowify("Correct!"), "bold"))
+                    self.__ui.display(augment(rainbowify(msg if msg else "Correct!"), "bold"))
                 case Opcode.NEGATIVE:
-                    self.__ui.display(augment("Incorrect!", "red", "bold"))
+                    self.__ui.display(augment(msg if msg else "Incorrect!", "red", "bold"))
                 case Opcode.UNKNOWN:
                     self.__ui.display(augment("Received an unknown message", "italic", "yellow"))
 
@@ -156,7 +161,7 @@ class Client:
             sys.exit(0)
 
         if self.__server and message:
-            self.__server.send(message.encode())
+            self.__server.send(create_message(Opcode.ANSWER, message).encode())
 
 
 def main() -> None:

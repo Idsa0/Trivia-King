@@ -2,12 +2,14 @@ import struct
 from enum import Enum
 
 
-class Opcode(Enum):  # TODO change this to reflect the actual requirements
+class Opcode(Enum):
     ABORT = 0x1  # indicates the end of the game and the client should terminate
     START = 0x2  # indicates the start of the game
     END = 0x4  # indicates the end of the game
     QUESTION = 0x8  # indicates a question
+    ANSWER = QUESTION  # indicates an answer
     INFO = 0x10  # indicates an informational message
+    RENAME = INFO  # indicates a rename request
     POSITIVE = 0x20  # indicates a positive response
     NEGATIVE = 0x40  # indicates a negative response
     UNKNOWN = 0x80  # indicates an unknown message
@@ -92,7 +94,6 @@ def get_opcode(data: bytes) -> Opcode:
     :param data: The data to extract from
     :return: The opcode
     """
-    print(data)  # TODO remove
     try:
         return Opcode(data[0])
     except ValueError:
@@ -105,7 +106,7 @@ def get_message(data: bytes) -> str:
     :param data: The data to extract from
     :return: The message
     """
-    return data[1:].decode()
+    return (data[1:]).decode()
 
 
 def answer_literal_to_bool(answer: str) -> bool | None:
