@@ -7,7 +7,6 @@
 # 6. close connection and return to step 1
 import random
 import sys
-import threading
 from socket import socket, AF_INET, SOCK_DGRAM, SOCK_STREAM
 
 from _socket import SOL_SOCKET, SO_REUSEADDR
@@ -46,10 +45,13 @@ class Client:
         Starts the client
         :return: None
         """
-        while self.__state != State.TERMINATED:
-            self.__gameloop()
-
-        self.stop()
+        try:
+            while self.__state != State.TERMINATED:
+                self.__gameloop()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self.stop()
 
     def __gameloop(self) -> None:
         # 1. wait for server broadcast and save server address and port
@@ -76,8 +78,9 @@ class Client:
         Stops the client
         :return: None
         """
-        # TODO implement
-        self.__ui.display(augment("Client stopped", "yellow"))
+        self.__reset()
+        self.__state = State.TERMINATED
+        self.__ui.display(augment("Client shutting down...", "red"))
 
     def __wait_for_broadcast(self) -> bool:
         # 1. wait for server broadcast and save server address and port
@@ -122,10 +125,13 @@ class Client:
         while self.__state == State.GAME_STARTED or self.__state == State.CONNECTED:
             try:
                 data = self.__server.recv(self.__BUFFER_SIZE)
-            except ConnectionResetError:
+            except (ConnectionResetError, ConnectionAbortedError):
                 self.__ui.display(augment("Server disconnected", "red"))
                 self.__reset()
                 return
+            except KeyboardInterrupt as e:
+                # start() should handle this
+                raise e
 
             opcode = get_opcode(data)
             msg = get_message(data)
@@ -141,7 +147,7 @@ class Client:
                     self.__reset()
                 case Opcode.QUESTION:
                     self.__ui.display(msg)
-                    threading.Thread(target=self.__send).start()
+                    self.__send()
                 case Opcode.INFO:
                     self.__ui.display(msg)
                 case Opcode.POSITIVE:
@@ -153,7 +159,9 @@ class Client:
 
     def __send(self) -> None:
         try:
-            message = self.__ui.get_input(timeout=QUESTION_TIMEOUT)
+            message = self.__ui.get_input(prompt="answer: ", timeout=QUESTION_TIMEOUT)
+            if not message:
+                self.__ui.display(augment("No input received", "red"))
         except KeyboardInterrupt:
             sys.exit(0)
 
@@ -161,7 +169,11 @@ class Client:
             sys.exit(0)
 
         if self.__server and message:
-            self.__server.send(create_message(Opcode.ANSWER, message).encode())
+            bool_msg = answer_literal_to_bool(message)
+            if bool_msg is not None:
+                self.__server.send(create_message(Opcode.ANSWER, str(bool_msg)).encode())
+            else:
+                self.__ui.display(augment("Invalid input", "red"))
 
 
 def main() -> None:

@@ -32,9 +32,11 @@ class CLI(UserInterface):
         """
         Gets input from the user
         :param prompt: (Optional) The prompt to display
-        :param timeout: (Optional) The timeout in seconds
+        :param timeout: (Optional) The timeout in seconds, no timeout for 0 or less
         :return: The user's input
         """
+        if timeout <= 0:
+            return input(prompt)
         try:
             return inputimeout(prompt, timeout)
         except TimeoutOccurred:

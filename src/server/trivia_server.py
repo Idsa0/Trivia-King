@@ -72,7 +72,7 @@ class TriviaServer(Server):
         self.__time_of_last_connection = 0
         self.__players = {}
         self.__state = State.INACTIVE
-        self.__ui = CLI(clr=False)  # TODO change this to default once done
+        self.__ui = CLI()
         self.__questions = get_trivia_questions(topic)
         self.__answers = {}
         self.__lock = threading.Lock()
@@ -98,12 +98,15 @@ class TriviaServer(Server):
         Starts the game
         :return: None
         """
-        self.__state = State.SENDING_OFFERS
-        while self.__state != State.TERMINATED:
-            self.__gameloop()
-            self.__reset_game()
-
-        self.stop()
+        try:
+            self.__state = State.SENDING_OFFERS
+            while self.__state != State.TERMINATED:
+                self.__gameloop()
+                self.__reset_game()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self.stop()
 
     def __gameloop(self) -> None:
         self.__sock.bind(('', 0))
@@ -119,9 +122,6 @@ class TriviaServer(Server):
         self.__time_of_last_connection = time.time()
         while self.__accepting_connections:
             self.__send_broadcast()
-
-            # Debugging the number of players TODO remove
-            self.__ui.display(f"Number of players connected: {self.player_count}")
 
             time.sleep(BROADCAST_SEND_INTERVAL)
 
@@ -141,29 +141,35 @@ class TriviaServer(Server):
 
         _round = 0
         while self.player_count >= MINIMUM_PLAYERS and self.question_count > 0 and _round < self.__rounds_per_game:
-            players = "\n".join([str(player) for player in self.__players.values()])
-            self.send_to_all(create_message(Opcode.INFO, f"Current Scores:\n{players}\n"))
+            with self.__lock:
+                players = "\n".join([str(player) for player in self.__players.values()])
+            self.send_to_all(create_message(Opcode.INFO, f"Round {_round + 1}\nCurrent Scores:\n{players}\n"))
+            self.__ui.display(f"Round {_round + 1}\nCurrent Scores:\n{players}\n")
 
             # Get a random trivia question
-            question = random.choice(list(self.__questions.keys()))
-            correct_answer = self.__questions[question]
+            question, correct_answer = random.choice(list(self.__questions.items()))
+            self.__ui.display(f"Question: {question}\nAnswer: {correct_answer}")
+            time.sleep(0.5)  # give players time to see the results
             self.send_to_all(create_message(Opcode.QUESTION, question))
 
             # Give players time to respond
             time.sleep(QUESTION_TIMEOUT)
 
             # Evaluate the answers and update scores
-            for player_name, answer in self.__answers.items():
-                player = self.__players[player_name]
-                if answer is correct_answer:
-                    player.increment_score()
-                    self.send_to(player, create_message(Opcode.POSITIVE, "Correct! You've earned a point."))
-                else:
-                    self.send_to(player, create_message(Opcode.NEGATIVE, "Incorrect! Better luck next time."))
+            with self.__lock:
+                for player_name, answer in self.__answers.items():
+                    player = self.__players[player_name]
+                    if answer is correct_answer:
+                        player.increment_score()
+                        self.send_to(player, create_message(Opcode.POSITIVE, "Correct! You've earned a point."))
+                    else:
+                        self.send_to(player, create_message(Opcode.NEGATIVE, "Incorrect! Better luck next time."))
 
             # Remove the question from the list of questions
             self.__questions.pop(question)
             _round += 1
+            self.__answers.clear()
+            time.sleep(0.5)  # give players time to see the results
 
         # Announce the winner or game over
         if (self.player_count == 1 or self.question_count == 0 or _round == self.__rounds_per_game) \
@@ -175,7 +181,8 @@ class TriviaServer(Server):
             self.send_to_all(create_message(Opcode.END, "Game Over! No winner this time."))
 
     def stop(self) -> None:
-        pass
+        self.__reset_game()
+        self.__ui.display(augment("Server shutting down...", "red"))
 
     def __reset_game(self) -> None:
         """
@@ -211,7 +218,11 @@ class TriviaServer(Server):
         :param data: The data to send
         :return: None
         """
-        conn.sock.send(data.encode())
+        try:
+            conn.sock.send(data.encode())
+        except OSError:
+            # this should only happen in the (impossibly) rare case that the player disconnects while sending a message
+            pass
 
     def send_to_all(self, data: str) -> None:
         """
@@ -234,7 +245,9 @@ class TriviaServer(Server):
             # handle thread interruption
             except OSError:
                 return
-            self.accept_connection(Player(conn, addr, "Player" + str(len(self.__players) + 1)))
+            player = Player(conn, addr, f"Player{self.player_count + 1}")
+            self.accept_connection(player)
+            self.__ui.display(f"Accepted connection from {player.name}")
             self.__time_of_last_connection = time.time()
 
     def accept_connection(self, conn: Player) -> None:
@@ -278,8 +291,9 @@ class TriviaServer(Server):
             except ConnectionResetError:
                 with self.__lock:
                     p = self.__players.pop(player.name)
-                p.sock.close()  # TODO do i need to close sock?
+                p.sock.close()
                 self.send_to_all(create_message(Opcode.INFO, f"{player.name} has disconnected."))
+                self.__ui.display(f"{player.name} has disconnected.")
                 with self.__lock:
                     self.__connection_threads.pop(player.name)
                 return
@@ -301,6 +315,7 @@ class TriviaServer(Server):
                 player.name = new_name
                 self.__players[new_name] = self.__players.pop(old_name)
                 self.__connection_threads[new_name] = self.__connection_threads.pop(old_name)
+                self.__ui.display(f"{old_name} is now known as {new_name}")
 
     def __leader(self) -> Player:
         """
@@ -320,7 +335,8 @@ class TriviaServer(Server):
 
     @property
     def player_count(self) -> int:
-        return len(self.__players)
+        with self.__lock:
+            return len(self.__players)
 
     @property
     def question_count(self) -> int:

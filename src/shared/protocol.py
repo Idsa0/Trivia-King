@@ -56,7 +56,7 @@ def create_message(opcode: Opcode, message: str) -> str:
     :param message: The content of the message
     :return: The resulting message
     """
-    # TODO I really dislike this hack
+    # I really dislike this hack, but it makes the type checker happy
     return (struct.pack("!B", opcode.value) + message.encode()).decode()
 
 
