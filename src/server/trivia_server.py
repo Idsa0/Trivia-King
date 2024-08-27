@@ -53,7 +53,7 @@ class State(Enum):
 class TriviaServer(Server):
     __BUFFER_SIZE = 1024
     __NAME_DEFAULT = "n3tw0rk1ng_m@st3r5"
-    __DEFAULT_ROUNDS_PER_GAME = 1
+    __DEFAULT_ROUNDS_PER_GAME = 3  # TODO change this to default once done
 
     def __init__(self, name: str = __NAME_DEFAULT, topic: QuestionLiteral = "networking",
                  rounds_per_game: int = __DEFAULT_ROUNDS_PER_GAME) -> None:
@@ -61,20 +61,21 @@ class TriviaServer(Server):
             raise ValueError(f"Name too long, must be less than {SERVER_NAME_LENGTH} characters")
 
         super().__init__(ip=gethostbyname(gethostname()))
-        self.__players = {}
         self.__name = name
+        self.__topic = topic
+        self.__rounds_per_game = rounds_per_game
+        self.__sock = socket()
         self.__port_tcp = 0
         self.__accept_thread = threading.Thread(target=self.accept_connections)
         self.__connection_threads = {}
-        self.__sock = None
         self.__accepting_connections = True
         self.__time_of_last_connection = 0
+        self.__players = {}
         self.__state = State.INACTIVE
         self.__ui = CLI(clr=False)  # TODO change this to default once done
-        self.__topic = topic
         self.__questions = get_trivia_questions(topic)
         self.__answers = {}
-        self.__rounds_per_game = rounds_per_game
+        self.__lock = threading.Lock()
 
     def send_broadcast(self, data: str, port: int) -> None:
         """
@@ -105,8 +106,7 @@ class TriviaServer(Server):
         self.stop()
 
     def __gameloop(self) -> None:
-        self.__sock = socket()
-        self.__sock.bind((self.ip, 0))
+        self.__sock.bind(('', 0))
         self.__port_tcp = self.__sock.getsockname()[1]
         self.__sock.listen()
 
@@ -120,7 +120,7 @@ class TriviaServer(Server):
         while self.__accepting_connections:
             self.__send_broadcast()
 
-            # Debugging the number of players
+            # Debugging the number of players TODO remove
             self.__ui.display(f"Number of players connected: {self.player_count}")
 
             time.sleep(BROADCAST_SEND_INTERVAL)
@@ -135,17 +135,18 @@ class TriviaServer(Server):
             return
 
         self.__state = State.GAME_STARTED
-        print("Game started")  # TODO remove this after debugging
         self.send_to_all(create_message(
             Opcode.START, f"Welcome to the {augment(self.__name, 'blue')} server, "
                           f"where we are answering trivia questions about {augment(self.__topic, 'underline')}!"))
 
         _round = 0
         while self.player_count >= MINIMUM_PLAYERS and self.question_count > 0 and _round < self.__rounds_per_game:
+            players = "\n".join([str(player) for player in self.__players.values()])
+            self.send_to_all(create_message(Opcode.INFO, f"Current Scores:\n{players}\n"))
+
             # Get a random trivia question
             question = random.choice(list(self.__questions.keys()))
             correct_answer = self.__questions[question]
-            self.__answers = {}
             self.send_to_all(create_message(Opcode.QUESTION, question))
 
             # Give players time to respond
@@ -181,21 +182,27 @@ class TriviaServer(Server):
         Ends the game, announce the winner
         :return: None
         """
-        self.__state = State.INACTIVE
-        self.__questions = get_trivia_questions(self.__topic)
-        if self.__accept_thread.is_alive():
-            self.__accepting_connections = False
-            self.__accept_thread.join(0)
-        self.__accept_thread = threading.Thread(target=self.accept_connections)
-        if self.__sock:
-            self.__sock.close()
-        self.__sock = None
-        for thread in self.__connection_threads.values():
-            thread.join(0)
-        self.__connection_threads.clear()
-        for player in self.__players.values():
-            player.sock.close()
-        self.__players.clear()
+        with self.__lock:
+            self.__state = State.INACTIVE
+            if self.__accept_thread.is_alive():
+                self.__accepting_connections = False
+                self.__accept_thread.join(0)
+            del self.__accept_thread
+            self.__accept_thread = threading.Thread(target=self.accept_connections)
+            for thread in self.__connection_threads.values():
+                thread.join(0)
+                del thread
+            self.__connection_threads.clear()
+            self.__questions = get_trivia_questions(self.__topic)
+            if self.__sock:
+                self.__sock.close()
+                del self.__sock
+            self.__sock = socket()
+            for player in self.__players.values():
+                player.sock.close()
+            self.__players.clear()
+            self.__answers.clear()
+            self.__time_of_last_connection = 0
 
     def send_to(self, conn: Connection, data: str) -> None:
         """
@@ -212,8 +219,9 @@ class TriviaServer(Server):
         :param data: The data to send
         :return: None
         """
-        for player in self.__players.values():
-            self.send_to(player, data)
+        with self.__lock:
+            for player in self.__players.values():
+                self.send_to(player, data)
 
     def accept_connections(self) -> None:
         """
@@ -221,7 +229,11 @@ class TriviaServer(Server):
         :return: None
         """
         while self.__accepting_connections:
-            conn, addr = self.__sock.accept()
+            try:
+                conn, addr = self.__sock.accept()
+            # handle thread interruption
+            except OSError:
+                return
             self.accept_connection(Player(conn, addr, "Player" + str(len(self.__players) + 1)))
             self.__time_of_last_connection = time.time()
 
@@ -231,9 +243,10 @@ class TriviaServer(Server):
         :param conn: The player to accept
         :return: None
         """
-        self.__players[conn.name] = conn
-        self.__connection_threads[conn.name] = threading.Thread(target=self.__handle_connection, args=(conn,))
-        self.__connection_threads[conn.name].start()
+        with self.__lock:
+            self.__players[conn.name] = conn
+            self.__connection_threads[conn.name] = threading.Thread(target=self.__handle_connection, args=(conn,))
+            self.__connection_threads[conn.name].start()
 
     def __handle_connection(self, player: Player) -> None:
         """
@@ -244,24 +257,33 @@ class TriviaServer(Server):
         while self.__state != State.TERMINATED:
             try:
                 data = player.sock.recv(self.__BUFFER_SIZE)
+                if not data:
+                    continue
                 opcode = get_opcode(data)
                 msg = get_message(data)
                 match opcode:
                     case Opcode.ANSWER:
                         if self.__state == State.GAME_STARTED:
-                            self.__answers[player.name] = answer_literal_to_bool(msg)
+                            with self.__lock:
+                                self.__answers[player.name] = answer_literal_to_bool(msg)
                     case Opcode.RENAME:
                         if self.__state == State.GAME_STARTED:
                             self.send_to(player, create_message(Opcode.INFO, "Cannot rename during game"))
                         else:
                             self.__rename_player(player, msg)
+                            self.send_to(player, create_message(Opcode.INFO,
+                                                                f"Henceforth, you shall be known as {player.name}"))
                     case _:
                         pass
             except ConnectionResetError:
-                p = self.__players.pop(player.name)
+                with self.__lock:
+                    p = self.__players.pop(player.name)
                 p.sock.close()  # TODO do i need to close sock?
                 self.send_to_all(create_message(Opcode.INFO, f"{player.name} has disconnected."))
-                self.__connection_threads.pop(player.name)
+                with self.__lock:
+                    self.__connection_threads.pop(player.name)
+                return
+            except OSError:
                 return
 
     def __rename_player(self, player: Player, new_name: str) -> None:
@@ -271,20 +293,22 @@ class TriviaServer(Server):
         :param new_name: The new name
         :return: None
         """
-        while new_name in self.__players:
-            new_name += random.choice("0123456789")
-        else:
-            old_name = player.name
-            player.name = new_name
-            self.__players[new_name] = self.__players.pop(old_name)
-            self.__connection_threads[new_name] = self.__connection_threads.pop(old_name)
+        with self.__lock:
+            while new_name in self.__players:
+                new_name += random.choice("0123456789")
+            else:
+                old_name = player.name
+                player.name = new_name
+                self.__players[new_name] = self.__players.pop(old_name)
+                self.__connection_threads[new_name] = self.__connection_threads.pop(old_name)
 
     def __leader(self) -> Player:
         """
         Returns the player with the highest score
         :return: The leader
         """
-        return max(self.__players.values())
+        with self.__lock:
+            return max(self.__players.values())
 
     @property
     def name(self) -> str:
@@ -304,7 +328,7 @@ class TriviaServer(Server):
 
 
 def main() -> None:
-    server = TriviaServer(topic="demo")  # TODO change this to networking
+    server = TriviaServer()
     server.start()
 
 
