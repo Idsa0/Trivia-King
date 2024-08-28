@@ -2,7 +2,7 @@ import csv
 import os
 from typing import Literal
 
-QuestionLiteral = Literal["networking", "demo"]
+QuestionLiteral = Literal["networking", "demo"]  # The types of questions that can be requested
 
 
 def get_trivia_questions(questions: QuestionLiteral = "networking") -> dict[str, bool]:

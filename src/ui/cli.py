@@ -5,6 +5,10 @@ from src.ui.userinterface import UserInterface
 
 
 class CLI(UserInterface):
+    """
+    A command-line interface
+    """
+
     def __init__(self, clr: bool = True) -> None:
         """
         Initializes the CLI

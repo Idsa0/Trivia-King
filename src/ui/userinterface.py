@@ -2,6 +2,10 @@ from abc import ABC, abstractmethod
 
 
 class UserInterface(ABC):
+    """
+    An abstract class for a user interface
+    """
+
     @abstractmethod
     def display(self, message: str) -> None:
         """

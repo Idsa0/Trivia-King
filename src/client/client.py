@@ -1,10 +1,3 @@
-# client flow:
-# 1. wait for server broadcast and save server address and port
-# 2. send join request to server
-# 3. print server messages and wait for user input
-# 4. send user input to server
-# 5. repeat steps 3 and 4 until server sends finish message
-# 6. close connection and return to step 1
 import random
 import sys
 from socket import socket, AF_INET, SOCK_DGRAM, SOCK_STREAM
@@ -18,19 +11,39 @@ from src.ui.userinterface import UserInterface
 
 
 class State(Enum):
+    """
+    Enum representing the state of the client
+    """
+
     WAITING_FOR_BROADCAST = 0x1
+    """
+    Indicates that the client is waiting for a broadcast from the server
+    """
     CONNECTING = 0x2
+    """
+    Indicates that the client is connecting to the server
+    """
     CONNECTED = 0x4
+    """
+    Indicates that the client is connected to the server
+    """
     GAME_STARTED = 0x8
+    """
+    Indicates that the game has started
+    """
     TERMINATED = 0x10
+    """
+    Indicates that the client has been terminated
+    """
 
 
 class Client:
-    __BUFFER_SIZE = 1024
+    __BUFFER_SIZE = 1024  # buffer size for receiving messages
 
-    __COMMON_NAMES = ["Alice", "Bob", "Charlie", "David", "Eve", "Frank", "Grace", "Heidi", "Ivan", "Judy", "Kevin",
-                      "Linda", "Mallory", "Nancy", "Oscar", "Peggy", "Quentin", "Romeo", "Sue", "Trent", "Ursula",
-                      "Victor", "Walter", "Xander", "Yvonne", "Zelda"]
+    __COMMON_NAMES = [  # common names to choose from when joining the server
+        "Alice", "Bob", "Charlie", "David", "Eve", "Frank", "Grace", "Heidi", "Ivan", "Judy", "Kevin",
+        "Linda", "Mallory", "Nancy", "Oscar", "Peggy", "Quentin", "Romeo", "Sue", "Trent", "Ursula",
+        "Victor", "Walter", "Xander", "Yvonne", "Zelda"]
 
     def __init__(self) -> None:
         self.__state: State = State.WAITING_FOR_BROADCAST
@@ -54,6 +67,10 @@ class Client:
             self.stop()
 
     def __gameloop(self) -> None:
+        """
+        Main game loop, handles the client flow for a single game
+        :return: None
+        """
         # 1. wait for server broadcast and save server address and port
         if not self.__wait_for_broadcast():
             return
@@ -65,6 +82,10 @@ class Client:
         self.__receive()
 
     def __reset(self) -> None:
+        """
+        Resets the client state
+        :return: None
+        """
         self.__state = State.WAITING_FOR_BROADCAST
         self.__server_addr = None
         self.__server_port = None
@@ -83,6 +104,10 @@ class Client:
         self.__ui.display(augment("Client shutting down...", "red"))
 
     def __wait_for_broadcast(self) -> bool:
+        """
+        Waits for a broadcast from the server and saves the server data
+        :return: True if the client successfully received a broadcast, False otherwise
+        """
         # 1. wait for server broadcast and save server address and port
         self.__ui.display(augment("Client started, listening for offer requests...", "yellow"))
         while self.__state == State.WAITING_FOR_BROADCAST:
@@ -104,12 +129,15 @@ class Client:
         return True
 
     def __connect(self) -> bool:
-        # TODO HANDLE TIMEOUT
+        """
+        Connects to the server
+        :return: True if the client successfully connected to the server, False otherwise
+        """
         # 2. send join request to server
         self.__server = socket(AF_INET, SOCK_STREAM)
         try:
             self.__server.connect((self.__server_addr, self.__server_port))
-        except:  # TODO check for specific exception
+        except:
             self.__ui.display(augment("Could not connect", "red"))
             self.__state = State.WAITING_FOR_BROADCAST
             self.__server.close()
@@ -121,6 +149,10 @@ class Client:
         return True
 
     def __receive(self) -> None:
+        """
+        Receives messages from the server and handles them
+        :return: None
+        """
         # 3. print server messages and wait for user input
         while self.__state == State.GAME_STARTED or self.__state == State.CONNECTED:
             try:
@@ -158,6 +190,10 @@ class Client:
                     self.__ui.display(augment("Received an unknown message", "italic", "yellow"))
 
     def __send(self) -> None:
+        """
+        Sends an answer to the server
+        :return: None
+        """
         try:
             message = self.__ui.get_input(prompt="answer: ", timeout=QUESTION_TIMEOUT)
             if not message:

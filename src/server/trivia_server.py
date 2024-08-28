@@ -8,9 +8,14 @@ from src.server.server import Server, Connection
 from src.shared.protocol import *
 from src.ui.ansi import augment
 from src.ui.cli import CLI
+from src.ui.userinterface import UserInterface
 
 
 class Player(Connection):
+    """
+    Represents a player in the trivia game
+    """
+
     def __init__(self, sock: socket, addr: tuple[str, int], name: str) -> None:
         super().__init__(sock, addr)
         self.__name = name
@@ -18,42 +23,92 @@ class Player(Connection):
 
     @property
     def name(self) -> str:
+        """
+        :return: The name of the player
+        """
         return self.__name
 
     @name.setter
     def name(self, name: str) -> None:
+        """
+        Sets the name of the player
+        :param name: The new name
+        :return: None
+        """
         self.__name = name
 
     @property
     def score(self) -> int:
+        """
+        :return: The score of the player
+        """
         return self.__score
 
     def increment_score(self) -> None:
+        """
+        Increments the score of the player
+        :return: None
+        """
         self.__score += 1
 
     def __str__(self) -> str:
+        """
+        :return: A string representation of the player
+        """
         return f"{self.__name} : {self.__score}"
 
     def __cmp__(self, other) -> int:
+        """
+        Compares the player with another player
+        :param other: The other player
+        :return: The difference in scores
+        """
         if not isinstance(other, Player):
             raise ValueError(f"Cannot compare Player with {type(other)}")
         return self.score - other.score
 
     def __lt__(self, other) -> bool:
+        """
+        Compares the player with another player
+        :param other: The other player
+        :return: Returns True if the player has a lower score than the other player
+        """
         return self.__cmp__(other) < 0
 
 
 class State(Enum):
+    """
+    Represents the state of the server
+    """
+
     INACTIVE = 0x1
+    """
+    The server is not running
+    """
     SENDING_OFFERS = 0x2
+    """
+    The server is sending offers to players
+    """
     GAME_STARTED = 0x4
+    """
+    The game has started
+    """
     TERMINATED = 0x8
+    """
+    The server is terminating
+    """
 
 
 class TriviaServer(Server):
-    __BUFFER_SIZE = 1024
-    __NAME_DEFAULT = "n3tw0rk1ng_m@st3r5"
-    __DEFAULT_ROUNDS_PER_GAME = 3  # TODO change this to default once done
+    """
+    A dedicated server for hosting trivia games, uses the UDP protocol for broadcasting
+    and the TCP protocol for communication with players, uses a thread-per-client model
+    """
+
+    __BUFFER_SIZE = 1024  # buffer size for receiving messages
+    __NAME_DEFAULT = "n3tw0rk1ng_m@st3r5"  # default name for the server
+    __DEFAULT_ROUNDS_PER_GAME = 3  # default number of rounds per game TODO change to 1
+    __TIME_BETWEEN_RESULTS = 0.5  # time to wait when showing players the results, for cosmetic purposes
 
     def __init__(self, name: str = __NAME_DEFAULT, topic: QuestionLiteral = "networking",
                  rounds_per_game: int = __DEFAULT_ROUNDS_PER_GAME) -> None:
@@ -61,21 +116,21 @@ class TriviaServer(Server):
             raise ValueError(f"Name too long, must be less than {SERVER_NAME_LENGTH} characters")
 
         super().__init__(ip=gethostbyname(gethostname()))
-        self.__name = name
-        self.__topic = topic
-        self.__rounds_per_game = rounds_per_game
-        self.__sock = socket()
-        self.__port_tcp = 0
-        self.__accept_thread = threading.Thread(target=self.accept_connections)
-        self.__connection_threads = {}
-        self.__accepting_connections = True
-        self.__time_of_last_connection = 0
-        self.__players = {}
-        self.__state = State.INACTIVE
-        self.__ui = CLI()
-        self.__questions = get_trivia_questions(topic)
-        self.__answers = {}
-        self.__lock = threading.Lock()
+        self.__name: str = name
+        self.__topic: QuestionLiteral = topic
+        self.__rounds_per_game: int = rounds_per_game
+        self.__sock: socket = socket()
+        self.__port_tcp: int = 0
+        self.__accept_thread: threading.Thread = threading.Thread(target=self.accept_connections)
+        self.__connection_threads: dict[str, threading.Thread] = {}
+        self.__accepting_connections: bool = True
+        self.__time_of_last_connection: float = 0
+        self.__players: dict[str, Player] = {}
+        self.__state: State = State.INACTIVE
+        self.__ui: UserInterface = CLI()
+        self.__questions: dict[str, bool] = get_trivia_questions(topic)
+        self.__answers: dict[str, bool | None] = {}
+        self.__lock: threading.Lock = threading.Lock()
 
     def send_broadcast(self, data: str, port: int) -> None:
         """
@@ -109,6 +164,11 @@ class TriviaServer(Server):
             self.stop()
 
     def __gameloop(self) -> None:
+        """
+        The main game loop, handles the game logic for a single game
+        :return: None
+        """
+
         self.__sock.bind(('', 0))
         self.__port_tcp = self.__sock.getsockname()[1]
         self.__sock.listen()
@@ -125,11 +185,13 @@ class TriviaServer(Server):
 
             time.sleep(BROADCAST_SEND_INTERVAL)
 
+            # stop sending offers if no one has connected for a while and there are enough players
             if time.time() - self.__time_of_last_connection > QUESTION_TIMEOUT \
                     and self.player_count >= MINIMUM_PLAYERS:
                 self.__accepting_connections = False
                 self.__accept_thread.join(0)
 
+        # extremely rare race condition where a player disconnects after the game has started
         if self.player_count < MINIMUM_PLAYERS:
             self.send_to_all(create_message(Opcode.END, "Not enough players to start the game"))
             return
@@ -140,6 +202,7 @@ class TriviaServer(Server):
                           f"where we are answering trivia questions about {augment(self.__topic, 'underline')}!"))
 
         _round = 0
+        # send questions to players until there are not enough players, no more questions, or the game is over
         while self.player_count >= MINIMUM_PLAYERS and self.question_count > 0 and _round < self.__rounds_per_game:
             with self.__lock:
                 players = "\n".join([str(player) for player in self.__players.values()])
@@ -149,7 +212,7 @@ class TriviaServer(Server):
             # Get a random trivia question
             question, correct_answer = random.choice(list(self.__questions.items()))
             self.__ui.display(f"Question: {question}\nAnswer: {correct_answer}")
-            time.sleep(0.5)  # give players time to see the results
+            time.sleep(self.__TIME_BETWEEN_RESULTS)  # give players time to see the results
             self.send_to_all(create_message(Opcode.QUESTION, question))
 
             # Give players time to respond
@@ -169,7 +232,7 @@ class TriviaServer(Server):
             self.__questions.pop(question)
             _round += 1
             self.__answers.clear()
-            time.sleep(0.5)  # give players time to see the results
+            time.sleep(self.__TIME_BETWEEN_RESULTS)  # give players time to see the results
 
         # Announce the winner or game over
         if (self.player_count == 1 or self.question_count == 0 or _round == self.__rounds_per_game) \
@@ -177,16 +240,22 @@ class TriviaServer(Server):
             winner = self.__leader()
             self.send_to_all(create_message(
                 Opcode.END, f"Game Over! Congratulations to the winner: {winner.name}"))
+            self.__ui.display(f"Game Over! Congratulations to the winner: {winner.name}")
         else:
             self.send_to_all(create_message(Opcode.END, "Game Over! No winner this time."))
+            self.__ui.display("Game Over! No winner this time.")
 
     def stop(self) -> None:
+        """
+        Stops the server
+        :return: None
+        """
         self.__reset_game()
         self.__ui.display(augment("Server shutting down...", "red"))
 
     def __reset_game(self) -> None:
         """
-        Ends the game, announce the winner
+        Resets the server to its initial state
         :return: None
         """
         with self.__lock:
@@ -221,7 +290,8 @@ class TriviaServer(Server):
         try:
             conn.sock.send(data.encode())
         except OSError:
-            # this should only happen in the (impossibly) rare case that the player disconnects while sending a message
+            # this should only happen in the (impossibly) rare case that
+            # the player disconnects while the server is sending a message
             pass
 
     def send_to_all(self, data: str) -> None:
@@ -242,7 +312,6 @@ class TriviaServer(Server):
         while self.__accepting_connections:
             try:
                 conn, addr = self.__sock.accept()
-            # handle thread interruption
             except OSError:
                 return
             player = Player(conn, addr, f"Player{self.player_count + 1}")
@@ -276,10 +345,12 @@ class TriviaServer(Server):
                 msg = get_message(data)
                 match opcode:
                     case Opcode.ANSWER:
+                        # If the game has started, store the answer
                         if self.__state == State.GAME_STARTED:
                             with self.__lock:
                                 self.__answers[player.name] = answer_literal_to_bool(msg)
                     case Opcode.RENAME:
+                        # If the game has started, do not allow renaming
                         if self.__state == State.GAME_STARTED:
                             self.send_to(player, create_message(Opcode.INFO, "Cannot rename during game"))
                         else:
@@ -289,6 +360,7 @@ class TriviaServer(Server):
                     case _:
                         pass
             except ConnectionResetError:
+                # Handle player disconnect
                 with self.__lock:
                     p = self.__players.pop(player.name)
                 p.sock.close()
@@ -309,6 +381,7 @@ class TriviaServer(Server):
         """
         with self.__lock:
             while new_name in self.__players:
+                # If the name is already taken, append a random digit to the name
                 new_name += random.choice("0123456789")
             else:
                 old_name = player.name
@@ -327,19 +400,31 @@ class TriviaServer(Server):
 
     @property
     def name(self) -> str:
+        """
+        :return: The name of the server
+        """
         return self.__name
 
     @property
     def topic(self) -> QuestionLiteral:
+        """
+        :return: The topic of the trivia questions
+        """
         return self.__topic
 
     @property
     def player_count(self) -> int:
+        """
+        :return: The number of players connected to the server
+        """
         with self.__lock:
             return len(self.__players)
 
     @property
     def question_count(self) -> int:
+        """
+        :return: The number of questions remaining
+        """
         return len(self.__questions)
 
 
