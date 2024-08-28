@@ -7,12 +7,9 @@ class Connection:
     Represents a connection to a client
     """
 
-    sock: socket  # TODO can i remove these?
-    addr: tuple[str, int]
-
     def __init__(self, sock: socket, addr: tuple[str, int]) -> None:
-        self.sock = sock
-        self.addr = addr
+        self.sock: socket = sock
+        self.addr: tuple[str, int] = addr
 
     def __str__(self) -> str:
         """

@@ -1,4 +1,5 @@
 import random
+import sys
 import threading
 import time
 from socket import socket, gethostname, gethostbyname
@@ -107,7 +108,7 @@ class TriviaServer(Server):
 
     __BUFFER_SIZE = 1024  # buffer size for receiving messages
     __NAME_DEFAULT = "n3tw0rk1ng_m@st3r5"  # default name for the server
-    __DEFAULT_ROUNDS_PER_GAME = 3  # default number of rounds per game TODO change to 1
+    __DEFAULT_ROUNDS_PER_GAME = 1  # default number of rounds per game
     __TIME_BETWEEN_RESULTS = 0.5  # time to wait when showing players the results, for cosmetic purposes
 
     def __init__(self, name: str = __NAME_DEFAULT, topic: QuestionLiteral = "networking",
@@ -131,6 +132,7 @@ class TriviaServer(Server):
         self.__questions: dict[str, bool] = get_trivia_questions(topic)
         self.__answers: dict[str, bool | None] = {}
         self.__lock: threading.Lock = threading.Lock()
+        self.__ui_lock: threading.Lock = threading.Lock()
 
     def send_broadcast(self, data: str, port: int) -> None:
         """
@@ -173,7 +175,8 @@ class TriviaServer(Server):
         self.__port_tcp = self.__sock.getsockname()[1]
         self.__sock.listen()
 
-        self.__ui.display(f"Server started, listening on IP address {augment(self.ip, 'blue')}")
+        with self.__ui_lock:
+            self.__ui.display(f"Server started, listening on IP address {augment(self.ip, 'blue')}")
 
         self.__accepting_connections = True
         self.__accept_thread.start()
@@ -193,25 +196,30 @@ class TriviaServer(Server):
 
         # extremely rare race condition where a player disconnects after the game has started
         if self.player_count < MINIMUM_PLAYERS:
-            self.send_to_all(create_message(Opcode.END, "Not enough players to start the game"))
+            self.send_to_all(create_message(Opcode.END, augment("Not enough players to start the game", "red")))
             return
 
         self.__state = State.GAME_STARTED
         self.send_to_all(create_message(
             Opcode.START, f"Welcome to the {augment(self.__name, 'blue')} server, "
                           f"where we are answering trivia questions about {augment(self.__topic, 'underline')}!"))
+        with self.__ui_lock:
+            self.__ui.display(f"Game started! Topic: {self.__topic}")
 
         _round = 0
         # send questions to players until there are not enough players, no more questions, or the game is over
-        while self.player_count >= MINIMUM_PLAYERS and self.question_count > 0 and _round < self.__rounds_per_game:
+        while self.__legal_game_state(_round):
             with self.__lock:
                 players = "\n".join([str(player) for player in self.__players.values()])
-            self.send_to_all(create_message(Opcode.INFO, f"Round {_round + 1}\nCurrent Scores:\n{players}\n"))
-            self.__ui.display(f"Round {_round + 1}\nCurrent Scores:\n{players}\n")
+            self.send_to_all(create_message(Opcode.INFO, f"\nRound {_round + 1}\nCurrent Scores:\n{players}\n"))
+            with self.__ui_lock:
+                self.__ui.display(f"\nRound {_round + 1}\nCurrent Scores:\n{players}\n")
 
             # Get a random trivia question
             question, correct_answer = random.choice(list(self.__questions.items()))
-            self.__ui.display(f"Question: {question}\nAnswer: {correct_answer}")
+            with self.__ui_lock:
+                self.__ui.display(
+                    f"Question: {question}\nAnswer: {augment(correct_answer, 'green' if correct_answer else 'red')}")
             time.sleep(self.__TIME_BETWEEN_RESULTS)  # give players time to see the results
             self.send_to_all(create_message(Opcode.QUESTION, question))
 
@@ -225,8 +233,12 @@ class TriviaServer(Server):
                     if answer is correct_answer:
                         player.increment_score()
                         self.send_to(player, create_message(Opcode.POSITIVE, "Correct! You've earned a point."))
+                        with self.__ui_lock:
+                            self.__ui.display(augment(f"{player.name} answered correctly!", "italic"))
                     else:
                         self.send_to(player, create_message(Opcode.NEGATIVE, "Incorrect! Better luck next time."))
+                        with self.__ui_lock:
+                            self.__ui.display(augment(f"{player.name} answered incorrectly.", "italic"))
 
             # Remove the question from the list of questions
             self.__questions.pop(question)
@@ -240,10 +252,20 @@ class TriviaServer(Server):
             winner = self.__leader()
             self.send_to_all(create_message(
                 Opcode.END, f"Game Over! Congratulations to the winner: {winner.name}"))
-            self.__ui.display(f"Game Over! Congratulations to the winner: {winner.name}")
+            with self.__ui_lock:
+                self.__ui.display(augment(f"Game Over! {winner.name} is the winner!", "italic"))
         else:
             self.send_to_all(create_message(Opcode.END, "Game Over! No winner this time."))
-            self.__ui.display("Game Over! No winner this time.")
+            with self.__ui_lock:
+                self.__ui.display(augment("Game Over! No winner this time.", "italic"))
+
+    def __legal_game_state(self, _round: int):
+        """
+        Determines if the game is in a legal state
+        :param _round: The current round
+        :return: True if the game is in a legal state
+        """
+        return self.player_count >= MINIMUM_PLAYERS and self.question_count > 0 and _round < self.__rounds_per_game
 
     def stop(self) -> None:
         """
@@ -251,34 +273,41 @@ class TriviaServer(Server):
         :return: None
         """
         self.__reset_game()
-        self.__ui.display(augment("Server shutting down...", "red"))
+        with self.__ui_lock:
+            self.__ui.display(augment("Server shutting down...", "red"))
 
     def __reset_game(self) -> None:
         """
         Resets the server to its initial state
         :return: None
         """
-        with self.__lock:
-            self.__state = State.INACTIVE
-            if self.__accept_thread.is_alive():
-                self.__accepting_connections = False
-                self.__accept_thread.join(0)
-            del self.__accept_thread
-            self.__accept_thread = threading.Thread(target=self.accept_connections)
-            for thread in self.__connection_threads.values():
-                thread.join(0)
-                del thread
-            self.__connection_threads.clear()
-            self.__questions = get_trivia_questions(self.__topic)
-            if self.__sock:
-                self.__sock.close()
-                del self.__sock
-            self.__sock = socket()
-            for player in self.__players.values():
-                player.sock.close()
-            self.__players.clear()
-            self.__answers.clear()
-            self.__time_of_last_connection = 0
+        try:
+            with self.__lock:
+                self.__state = State.INACTIVE
+                if self.__accept_thread.is_alive():
+                    self.__accepting_connections = False
+                    self.__accept_thread.join(0)
+                del self.__accept_thread
+                self.__accept_thread = threading.Thread(target=self.accept_connections)
+                for thread in self.__connection_threads.values():
+                    thread.join(0)
+                    del thread
+                self.__connection_threads.clear()
+                self.__questions = get_trivia_questions(self.__topic)
+                if self.__sock:
+                    self.__sock.close()
+                    del self.__sock
+                self.__sock = socket()
+                for player in self.__players.values():
+                    player.sock.close()
+                self.__players.clear()
+                self.__answers.clear()
+                self.__time_of_last_connection = 0
+        except KeyboardInterrupt:
+            # exit gracefully, an uncaught KeyboardInterrupt here will otherwise be caught incorrectly
+            with self.__ui_lock:
+                self.__ui.display(augment("Server shutting down...", "red"))
+            sys.exit(0)
 
     def send_to(self, conn: Connection, data: str) -> None:
         """
@@ -290,8 +319,8 @@ class TriviaServer(Server):
         try:
             conn.sock.send(data.encode())
         except OSError:
-            # this should only happen in the (impossibly) rare case that
-            # the player disconnects while the server is sending a message
+            # this should only happen in the rare case that the player disconnects
+            # while the server is sending a message
             pass
 
     def send_to_all(self, data: str) -> None:
@@ -316,7 +345,8 @@ class TriviaServer(Server):
                 return
             player = Player(conn, addr, f"Player{self.player_count + 1}")
             self.accept_connection(player)
-            self.__ui.display(f"Accepted connection from {player.name}")
+            with self.__ui_lock:
+                self.__ui.display(f"Accepted connection from {player.name}")
             self.__time_of_last_connection = time.time()
 
     def accept_connection(self, conn: Player) -> None:
@@ -365,9 +395,24 @@ class TriviaServer(Server):
                     p = self.__players.pop(player.name)
                 p.sock.close()
                 self.send_to_all(create_message(Opcode.INFO, f"{player.name} has disconnected."))
-                self.__ui.display(f"{player.name} has disconnected.")
+                with self.__ui_lock:
+                    self.__ui.display(f"{player.name} has disconnected.")
                 with self.__lock:
                     self.__connection_threads.pop(player.name)
+                return
+            except ConnectionAbortedError:
+                # carefully handle player disconnect,
+                # while technically reused code, we must ensure fully synchronized access>
+                # POTENTIAL future improvement: refactor to a common method: __handle_disconnect(self, player)
+                with self.__lock:
+                    if player.name in self.__players:
+                        p = self.__players.pop(player.name)
+                        p.sock.close()
+                self.send_to_all(create_message(Opcode.INFO, f"{player.name} has disconnected."))
+                with self.__lock:
+                    self.__ui.display(f"{player.name} has disconnected.")
+                    if player.name in self.__connection_threads:
+                        self.__connection_threads.pop(player.name)
                 return
             except OSError:
                 return
@@ -388,7 +433,8 @@ class TriviaServer(Server):
                 player.name = new_name
                 self.__players[new_name] = self.__players.pop(old_name)
                 self.__connection_threads[new_name] = self.__connection_threads.pop(old_name)
-                self.__ui.display(f"{old_name} is now known as {new_name}")
+                with self.__ui_lock:
+                    self.__ui.display(f"{old_name} is now known as {new_name}")
 
     def __leader(self) -> Player:
         """

@@ -1,8 +1,0 @@
-server:
-    text according to the requirements
-    optional: get name with argv
-
-
-
-client:
-    optional: get name with argv
