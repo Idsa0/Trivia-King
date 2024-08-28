@@ -1,8 +1,0 @@
-server:
-    everything
-
-client:
-    optional: get name with argv
-
-ui:
-    get_boolean_input should use kwargs

@@ -27,7 +27,7 @@ facts and must answer correctly as quickly as possible.
 1. Navigate to the root directory of the project.
 2. Run the server script using Python:
    ```sh
-   ./run_server.bat
+   python3 ./run_server.py
    ```
 
 ### Running the Client
@@ -35,7 +35,7 @@ facts and must answer correctly as quickly as possible.
 1. Navigate to the root directory of the project.
 2. Run the client script using Python:
    ```sh
-   ./run_client.bat
+   python3 ./run_client.py
    ```
 
 ## Example Run

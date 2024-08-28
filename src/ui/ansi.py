@@ -1,6 +1,6 @@
 from random import choice
 
-__ANSI_COLORS = {
+__ANSI_COLORS: dict[str, str] = {  # ANSI escape codes for colors
     "red": "\033[91m",
     "green": "\033[92m",
     "yellow": "\033[93m",
@@ -9,7 +9,7 @@ __ANSI_COLORS = {
     "cyan": "\033[96m",
     "white": "\033[97m"
 }
-__ANSI_FORMATS = {
+__ANSI_FORMATS: dict[str, str] = {  # ANSI escape codes for formats
     "bold": "\033[1m",
     "italic": "\033[3m",
     "underline": "\033[4m",
@@ -17,10 +17,10 @@ __ANSI_FORMATS = {
     "strikethrough": "\033[9m",
     "double_underline": "\033[21m"
 }
-__ANSI_END = "\033[0m"
-ANSI = {**__ANSI_COLORS, **__ANSI_FORMATS, "end": __ANSI_END}
+__ANSI_END: str = "\033[0m"  # ANSI escape code to end formatting
+ANSI: dict[str, str] = {**__ANSI_COLORS, **__ANSI_FORMATS, "end": __ANSI_END}  # ANSI escape codes
 
-CLEAR = "\033[H\033[J"
+CLEAR: str = "\033[H\033[J"  # ANSI escape code to clear the screen
 
 
 def augment(message: str, *args: str) -> str:
@@ -73,17 +73,3 @@ def clean(message: str) -> str:
     for ansi in ANSI.values():
         message = message.replace(ansi, "")
     return message
-
-
-if __name__ == "__main__":
-    print(augment("Hello, World!", "red", "bold", "underline"))
-    for color in __ANSI_COLORS:
-        print(augment("#", color), end="")
-    print()
-    for fmt in __ANSI_FORMATS:
-        print(augment("#", fmt), end="")
-    print()
-
-    rainbow = rainbowify("Hello, World!")
-    print(rainbow)
-    print(clean(rainbow))
